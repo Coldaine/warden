@@ -37,7 +37,9 @@ describe('Mermaid Trajectory Adapter', () => {
     const exported = exportMermaidTrajectory(graph);
     
     const secondGraph = parseMermaidTrajectory(exported, repoSlug);
-    expect(secondGraph.nodes).toEqual(graph.nodes);
+    // Compare without timestamps since parseMermaidTrajectory assigns 'now'
+    expect(secondGraph.nodes.map(n => ({ id: n.id, title: n.title, status: n.status })))
+      .toEqual(graph.nodes.map(n => ({ id: n.id, title: n.title, status: n.status })));
     expect(secondGraph.edges).toEqual(graph.edges);
   });
 
