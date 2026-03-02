@@ -1,5 +1,7 @@
 import type { RepoSuppression } from "./findings.js";
 
+import type { TrajectoryGraph } from "./trajectory.js";
+
 export interface RepoThresholds {
   staleDays: number;
   docStaleDays: number;
@@ -311,4 +313,5 @@ export interface SnapshotBundle {
   runtime?: RuntimeSnapshot;
   coverage?: CoverageSnapshot;
   docStaleness?: DocStalenessSnapshot;
+  trajectory?: TrajectoryGraph;
 }
