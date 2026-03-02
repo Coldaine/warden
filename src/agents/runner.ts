@@ -33,6 +33,8 @@ import { updateWikiPageForResolvedFinding } from "./wiki-agent.js";
 import { computeDelta } from "./delta.js";
 import { assemblePrompt } from "./prompt.js";
 import { callProvider } from "./provider.js";
+import { dispatch } from "../notifications/dispatcher.js";
+import { getDashboardBaseUrl } from "../notifications/utils.js";
 
 export interface AnalysisResult {
   analysis: string;
@@ -148,8 +150,19 @@ export interface AnalysisOptions {
 
 interface BaselineContext {
   baselineFindings: FindingInstance[];
+  baselineSnapshot?: LoadedSnapshot;
   delta: import("./delta.js").SnapshotDelta | undefined;
   deltaContextLabel: string | undefined;
+}
+
+async function dispatchBestEffort(
+  event: import("../types/notifications.js").NotificationEvent,
+): Promise<void> {
+  try {
+    await dispatch(event);
+  } catch {
+    // Notifications are best-effort by design.
+  }
 }
 
 async function resolveBaselineContext(
@@ -165,6 +178,7 @@ async function resolveBaselineContext(
     );
     return {
       baselineFindings: evaluateFindings(config, baseline, allowlistRules),
+      baselineSnapshot: baseline,
       delta: computeDelta(baseline, currentSnapshot),
       deltaContextLabel: `vs branch ${options.compareBranch}`,
     };
@@ -174,6 +188,7 @@ async function resolveBaselineContext(
   if (!previous) {
     return {
       baselineFindings: [],
+      baselineSnapshot: undefined,
       delta: undefined,
       deltaContextLabel: undefined,
     };
@@ -181,6 +196,7 @@ async function resolveBaselineContext(
 
   return {
     baselineFindings: evaluateFindings(config, previous, allowlistRules),
+    baselineSnapshot: previous,
     delta: computeDelta(previous, currentSnapshot),
     deltaContextLabel: "vs previous snapshot",
   };
@@ -319,6 +335,21 @@ async function handleEscalations(slug: string): Promise<string[]> {
       );
     }
     await saveWorkDocument(slug, doc);
+
+    await dispatchBestEffort({
+      type: "escalation",
+      slug,
+      timestamp: new Date().toISOString(),
+      severity: doc.severity,
+      summary: `${doc.code} escalated after ${doc.consecutiveReports} consecutive reports.`,
+      details: {
+        findingId: doc.findingId,
+        code: doc.code,
+        consecutiveReports: doc.consecutiveReports,
+        status: doc.status,
+      },
+      dashboardUrl: `${getDashboardBaseUrl()}/repo/${encodeURIComponent(slug)}/work?findingId=${encodeURIComponent(doc.findingId)}`,
+    });
   }
 
   return messages;
@@ -449,6 +480,32 @@ export async function runAnalysis(
     escalationMessages,
   );
 
+  const baselineCoverage =
+    baselineContext.baselineSnapshot?.coverage?.summary.averageCoverage;
+  const currentCoverage = currentSnapshot.coverage?.summary.averageCoverage;
+  if (
+    typeof baselineCoverage === "number" &&
+    typeof currentCoverage === "number"
+  ) {
+    const drop = Number((baselineCoverage - currentCoverage).toFixed(2));
+    if (drop >= config.thresholds.coverageRegressionPct) {
+      await dispatchBestEffort({
+        type: "coverage-regression",
+        slug: config.slug,
+        timestamp: new Date().toISOString(),
+        severity: "S2",
+        summary: `Coverage dropped ${drop}% (${baselineCoverage}% -> ${currentCoverage}%).`,
+        details: {
+          baselineCoverage,
+          currentCoverage,
+          drop,
+          threshold: config.thresholds.coverageRegressionPct,
+        },
+        dashboardUrl: `${getDashboardBaseUrl()}/repo/${encodeURIComponent(config.slug)}`,
+      });
+    }
+  }
+
   const allConfigs = await loadRepoConfigs();
   const enableCrossRepo =
     process.env.WARDEN_ENABLE_CROSS_REPO_ANALYSIS === "true";
@@ -490,6 +547,19 @@ export async function runAnalysis(
       revoked: revokedRules,
     });
 
+    await dispatchBestEffort({
+      type: "analysis-complete",
+      slug: config.slug,
+      timestamp: new Date().toISOString(),
+      summary: `Analysis complete with ${currentFindings.length} active findings.`,
+      details: {
+        findings: currentFindings.length,
+        improvements: improvements.length,
+        escalations: escalationMessages.length,
+      },
+      dashboardUrl: `${getDashboardBaseUrl()}/repo/${encodeURIComponent(config.slug)}`,
+    });
+
     return {
       analysis: fullAnalysis,
       snapshotTimestamp,
@@ -506,6 +576,19 @@ export async function runAnalysis(
     activeRules: autonomyConfig.rules,
     impacts,
     revoked: revokedRules,
+  });
+
+  await dispatchBestEffort({
+    type: "analysis-complete",
+    slug: config.slug,
+    timestamp: new Date().toISOString(),
+    summary: `Analysis complete with ${currentFindings.length} active findings.`,
+    details: {
+      findings: currentFindings.length,
+      improvements: 0,
+      escalations: escalationMessages.length,
+    },
+    dashboardUrl: `${getDashboardBaseUrl()}/repo/${encodeURIComponent(config.slug)}`,
   });
 
   return {
