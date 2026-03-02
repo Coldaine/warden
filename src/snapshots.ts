@@ -76,7 +76,7 @@ export async function loadSnapshotByTimestamp(
       path.join(snapshotDir, "doc-staleness.json"),
     ),
     readJsonIfPresent<TrajectoryGraph>(
-      path.resolve(process.cwd(), "data", slug, "trajectory", "state.json"),
+      path.join(process.cwd(), "data", slug, "trajectory", "state.json"),
     ),
   ]);
 

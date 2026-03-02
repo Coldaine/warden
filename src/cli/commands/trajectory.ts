@@ -46,11 +46,19 @@ export async function runTrajectoryCommand(args: string[]): Promise<void> {
     case "patch": {
       const opsPath = getFlagValue(args, "--ops");
       if (!opsPath) throw new Error("Missing --ops <path> to patch operations JSON");
-      const expectedRevision = getFlagValue(args, "--rev");
+      const revRaw = getFlagValue(args, "--rev");
+      let expectedRevision: number | undefined;
+      
+      if (revRaw !== undefined) {
+        expectedRevision = Number(revRaw);
+        if (Number.isNaN(expectedRevision)) {
+          throw new Error(`Invalid revision: "${revRaw}". Must be a number.`);
+        }
+      }
       
       const raw = await fs.readFile(opsPath, 'utf-8');
       const ops = JSON.parse(raw);
-      await store.patch("cli", ops, expectedRevision ? Number(expectedRevision) : undefined);
+      await store.patch("cli", ops, expectedRevision);
       console.log(`Applied patch to repo "${repoSlug}"`);
       break;
     }

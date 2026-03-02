@@ -312,7 +312,9 @@ function renderTrajectorySection(
   const { blocked } = toTrajectoryLines(graph);
   const updatedAt = new Date(graph.meta.updatedAt);
   const now = new Date();
-  const daysOld = (now.getTime() - updatedAt.getTime()) / (1000 * 60 * 60 * 24);
+  const daysOld = Math.floor(
+    (now.getTime() - updatedAt.getTime()) / (1000 * 60 * 60 * 24),
+  );
   const staleThreshold = config.thresholds.staleDays || 10;
 
   return `## Trajectory health (M10)
@@ -321,7 +323,7 @@ function renderTrajectorySection(
 ${renderList(blocked)}
 
 ### [WD-M10-002] Graph status
-- Last updated: ${graph.meta.updatedAt} (${Math.floor(daysOld)} days ago)
+- Last updated: ${graph.meta.updatedAt} (${daysOld} days ago)
 - Status: ${daysOld >= staleThreshold ? "STALE" : "OK"} (threshold: ${staleThreshold}d)
 `;
 }
