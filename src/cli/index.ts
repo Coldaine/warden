@@ -9,11 +9,13 @@ import { runGithubCommand } from "./commands/github.js";
 import { runHookCommand } from "./commands/hook.js";
 import { runInitCommand } from "./commands/init.js";
 import { runMcpCommand } from "./commands/mcp.js";
+import { runNotifyCommand } from "./commands/notify.js";
 import { runPruneCommand } from "./commands/prune.js";
 import { runReportCommand } from "./commands/report.js";
 import { runWebhookCommand } from "./commands/webhook.js";
 import { runWikiCommand } from "./commands/wiki.js";
 import { runWorkCommand } from "./commands/work.js";
+import { runTrajectoryCommand } from "./commands/trajectory.js";
 
 function printHelp(): void {
   process.stdout.write(`Warden CLI\n\n`);
@@ -22,7 +24,7 @@ function printHelp(): void {
   process.stdout.write(`  warden add <path|github:owner/repo>\n`);
   process.stdout.write(`  warden collect [--repo <slug>]\n`);
   process.stdout.write(
-    `  warden report [--repo <slug>] [--analyze] [--compare <branch>]\n`,
+    `  warden report [--repo <slug>] [--analyze] [--compare <branch>] [--portfolio]\n`,
   );
   process.stdout.write(`  warden analyze [--repo <slug>]\n`);
   process.stdout.write(`  warden autonomy <grant|revoke|list|impact> ...\n`);
@@ -31,8 +33,12 @@ function printHelp(): void {
   process.stdout.write(`  warden hook install [--repo <slug>]\n`);
   process.stdout.write(`  warden hook uninstall [--repo <slug>]\n`);
   process.stdout.write(`  warden hook tick --repo <slug>\n`);
+  process.stdout.write(`  warden trajectory <init|validate> [--repo <slug>]\n`);
   process.stdout.write(`  warden github auth [--token <token>]\n`);
   process.stdout.write(`  warden webhook <start|stop>\n`);
+  process.stdout.write(
+    `  warden notify <test|digest> [--repo <slug>] [--days <n>]\n`,
+  );
   process.stdout.write(`  warden wiki <WD-code>\n`);
   process.stdout.write(
     `  warden work [--repo <slug>] [<findingId>] [--status <status>] [--note <text>]\n`,
@@ -91,7 +97,8 @@ function createCommandHandlers(): Record<string, CommandHandler> {
       const repoSlug = getFlagValue(rest, "--repo");
       const analyze = rest.includes("--analyze");
       const compareBranch = getFlagValue(rest, "--compare");
-      await runReportCommand(repoSlug, analyze, compareBranch);
+      const portfolio = rest.includes("--portfolio");
+      await runReportCommand({ repoSlug, analyze, compareBranch, portfolio });
     },
     analyze: async (rest: string[]) => {
       const repoSlug = getFlagValue(rest, "--repo");
@@ -120,6 +127,9 @@ function createCommandHandlers(): Record<string, CommandHandler> {
     webhook: async (rest: string[]) => {
       await runWebhookCommand(rest);
     },
+    notify: async (rest: string[]) => {
+      await runNotifyCommand(rest);
+    },
     wiki: async (rest: string[]) => {
       const code = rest[0];
       if (!code) {
@@ -130,6 +140,9 @@ function createCommandHandlers(): Record<string, CommandHandler> {
     },
     work: async (rest: string[]) => {
       await runWorkCommand(rest);
+    },
+    trajectory: async (rest: string[]) => {
+      await runTrajectoryCommand(rest);
     },
     mcp: async (rest: string[]) => {
       const transportArg = getFlagValue(rest, "--transport");

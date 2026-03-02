@@ -1,5 +1,7 @@
 import { loadAllowlist } from "../config/allowlist.js";
+import { loadRepoConfigs } from "../config/loader.js";
 import { evaluateFindings } from "../findings/evaluate.js";
+import { runCrossRepoAnalysis } from "../github/cross-repo.js";
 import type { FindingInstance } from "../types/findings.js";
 import type { RepoConfig } from "../types/snapshot.js";
 import type { WorkDocument } from "../types/work.js";
@@ -28,9 +30,13 @@ import { evaluateRevocations, loadAutonomyConfig } from "../work/autonomy.js";
 import { assessImpactRecords } from "../work/impact.js";
 import { runPlanningAgent } from "./planning-agent.js";
 import { updateWikiPageForResolvedFinding } from "./wiki-agent.js";
+import type { AgentResult } from "./base-agent.js";
+import { scheduleAgentWork } from "./scheduler.js";
 import { computeDelta } from "./delta.js";
 import { assemblePrompt } from "./prompt.js";
 import { callProvider } from "./provider.js";
+import { dispatch } from "../notifications/dispatcher.js";
+import { getDashboardBaseUrl } from "../notifications/utils.js";
 
 export interface AnalysisResult {
   analysis: string;
@@ -38,6 +44,7 @@ export interface AnalysisResult {
   snapshot: LoadedSnapshot;
   findings: FindingInstance[];
   improvements: string[];
+  agentResults: AgentResult[];
   workDocumentSummary?: WorkDocumentSummary;
 }
 
@@ -146,8 +153,19 @@ export interface AnalysisOptions {
 
 interface BaselineContext {
   baselineFindings: FindingInstance[];
+  baselineSnapshot?: LoadedSnapshot;
   delta: import("./delta.js").SnapshotDelta | undefined;
   deltaContextLabel: string | undefined;
+}
+
+async function dispatchBestEffort(
+  event: import("../types/notifications.js").NotificationEvent,
+): Promise<void> {
+  try {
+    await dispatch(event);
+  } catch {
+    // Notifications are best-effort by design.
+  }
 }
 
 async function resolveBaselineContext(
@@ -163,6 +181,7 @@ async function resolveBaselineContext(
     );
     return {
       baselineFindings: evaluateFindings(config, baseline, allowlistRules),
+      baselineSnapshot: baseline,
       delta: computeDelta(baseline, currentSnapshot),
       deltaContextLabel: `vs branch ${options.compareBranch}`,
     };
@@ -172,6 +191,7 @@ async function resolveBaselineContext(
   if (!previous) {
     return {
       baselineFindings: [],
+      baselineSnapshot: undefined,
       delta: undefined,
       deltaContextLabel: undefined,
     };
@@ -179,6 +199,7 @@ async function resolveBaselineContext(
 
   return {
     baselineFindings: evaluateFindings(config, previous, allowlistRules),
+    baselineSnapshot: previous,
     delta: computeDelta(previous, currentSnapshot),
     deltaContextLabel: "vs previous snapshot",
   };
@@ -213,17 +234,41 @@ async function annotateRevokedAssignments(
 function composeAnalysisWithStatus(params: {
   analysis: string;
   summary: WorkDocumentSummary;
+  agentResults: AgentResult[];
   activeRules: Awaited<ReturnType<typeof loadAutonomyConfig>>["rules"];
   impacts: Awaited<ReturnType<typeof assessImpactRecords>>;
   revoked: Awaited<ReturnType<typeof evaluateRevocations>>;
 }): string {
   const workStatusSection = renderWorkDocumentStatus(params.summary);
+  const agentSection = renderAgentResultsSection(params.agentResults);
   const autoMergeSection = renderAutoMergeActivity({
     activeRules: params.activeRules,
     impacts: params.impacts,
     revoked: params.revoked,
   });
-  return `${params.analysis}\n\n${workStatusSection}\n\n${autoMergeSection}`;
+  return `${params.analysis}\n\n${workStatusSection}\n\n${agentSection}\n\n${autoMergeSection}`;
+}
+
+function renderAgentResultsSection(agentResults: AgentResult[]): string {
+  const lines: string[] = [
+    "## Agent Activity",
+    "",
+    "| Agent | Finding | Status | Attempts | Branch | PR |",
+    "|-------|---------|--------|----------|--------|----|",
+  ];
+
+  if (agentResults.length === 0) {
+    lines.push("| (none) | - | - | - | - | - |");
+    return lines.join("\n");
+  }
+
+  for (const result of agentResults) {
+    lines.push(
+      `| ${result.agentName} | ${result.findingCode} | ${result.status} | ${result.attempts} | ${result.branch ?? "-"} | ${result.prUrl ?? "-"} |`,
+    );
+  }
+
+  return lines.join("\n");
 }
 
 async function updateExistingWorkDoc(
@@ -317,6 +362,21 @@ async function handleEscalations(slug: string): Promise<string[]> {
       );
     }
     await saveWorkDocument(slug, doc);
+
+    await dispatchBestEffort({
+      type: "escalation",
+      slug,
+      timestamp: new Date().toISOString(),
+      severity: doc.severity,
+      summary: `${doc.code} escalated after ${doc.consecutiveReports} consecutive reports.`,
+      details: {
+        findingId: doc.findingId,
+        code: doc.code,
+        consecutiveReports: doc.consecutiveReports,
+        status: doc.status,
+      },
+      dashboardUrl: `${getDashboardBaseUrl()}/repo/${encodeURIComponent(slug)}/work?findingId=${encodeURIComponent(doc.findingId)}`,
+    });
   }
 
   return messages;
@@ -427,6 +487,12 @@ export async function runAnalysis(
   );
 
   const resolvedThisRun = await syncWorkDocuments(config.slug, currentFindings);
+  const docsForScheduling = await loadWorkDocuments(config.slug);
+  const agentResults = await scheduleAgentWork(
+    config,
+    currentSnapshot,
+    docsForScheduling,
+  );
   const escalationMessages = await handleEscalations(config.slug);
   const impacts = await assessImpactRecords(
     config.slug,
@@ -447,12 +513,47 @@ export async function runAnalysis(
     escalationMessages,
   );
 
+  const baselineCoverage =
+    baselineContext.baselineSnapshot?.coverage?.summary.averageCoverage;
+  const currentCoverage = currentSnapshot.coverage?.summary.averageCoverage;
+  if (
+    typeof baselineCoverage === "number" &&
+    typeof currentCoverage === "number"
+  ) {
+    const drop = Number((baselineCoverage - currentCoverage).toFixed(2));
+    if (drop >= config.thresholds.coverageRegressionPct) {
+      await dispatchBestEffort({
+        type: "coverage-regression",
+        slug: config.slug,
+        timestamp: new Date().toISOString(),
+        severity: "S2",
+        summary: `Coverage dropped ${drop}% (${baselineCoverage}% -> ${currentCoverage}%).`,
+        details: {
+          baselineCoverage,
+          currentCoverage,
+          drop,
+          threshold: config.thresholds.coverageRegressionPct,
+        },
+        dashboardUrl: `${getDashboardBaseUrl()}/repo/${encodeURIComponent(config.slug)}`,
+      });
+    }
+  }
+
+  const allConfigs = await loadRepoConfigs();
+  const enableCrossRepo =
+    process.env.WARDEN_ENABLE_CROSS_REPO_ANALYSIS === "true";
+  const crossRepo =
+    enableCrossRepo && allConfigs.length >= 2
+      ? await runCrossRepoAnalysis(allConfigs, { persist: false })
+      : null;
+
   const userPrompt = assemblePrompt(
     config,
     currentSnapshot,
     baselineContext.delta,
     baselineContext.deltaContextLabel,
     currentFindings,
+    crossRepo,
   );
   const analysis = await callProvider({
     systemPrompt:
@@ -474,9 +575,23 @@ export async function runAnalysis(
     const fullAnalysis = composeAnalysisWithStatus({
       analysis,
       summary: workDocumentSummary,
+      agentResults,
       activeRules: autonomyConfig.rules,
       impacts,
       revoked: revokedRules,
+    });
+
+    await dispatchBestEffort({
+      type: "analysis-complete",
+      slug: config.slug,
+      timestamp: new Date().toISOString(),
+      summary: `Analysis complete with ${currentFindings.length} active findings.`,
+      details: {
+        findings: currentFindings.length,
+        improvements: improvements.length,
+        escalations: escalationMessages.length,
+      },
+      dashboardUrl: `${getDashboardBaseUrl()}/repo/${encodeURIComponent(config.slug)}`,
     });
 
     return {
@@ -485,6 +600,7 @@ export async function runAnalysis(
       snapshot: currentSnapshot,
       findings: currentFindings,
       improvements,
+      agentResults,
       workDocumentSummary,
     };
   }
@@ -492,9 +608,23 @@ export async function runAnalysis(
   const fullAnalysis = composeAnalysisWithStatus({
     analysis,
     summary: workDocumentSummary,
+    agentResults,
     activeRules: autonomyConfig.rules,
     impacts,
     revoked: revokedRules,
+  });
+
+  await dispatchBestEffort({
+    type: "analysis-complete",
+    slug: config.slug,
+    timestamp: new Date().toISOString(),
+    summary: `Analysis complete with ${currentFindings.length} active findings.`,
+    details: {
+      findings: currentFindings.length,
+      improvements: 0,
+      escalations: escalationMessages.length,
+    },
+    dashboardUrl: `${getDashboardBaseUrl()}/repo/${encodeURIComponent(config.slug)}`,
   });
 
   return {
@@ -503,6 +633,7 @@ export async function runAnalysis(
     snapshot: currentSnapshot,
     findings: currentFindings,
     improvements: [],
+    agentResults,
     workDocumentSummary,
   };
 }
