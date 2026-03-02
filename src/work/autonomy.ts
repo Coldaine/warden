@@ -339,10 +339,11 @@ export async function grantGlobalAutonomyPolicy(params: {
   const policy: GlobalAutonomyPolicy = {
     agentName: params.agentName,
     minAggregateScore: params.minAggregateScore,
-    allowedSeverities:
+    allowedSeverities: sortedUnique(
       params.allowedSeverities && params.allowedSeverities.length > 0
         ? params.allowedSeverities
         : ["S0", "S1", "S2", "S3", "S4", "S5"],
+    ) as Severity[],
     allowedCodes: sortedUnique(params.allowedCodes ?? []),
     appliesTo: sortedUnique(params.appliesTo ?? []),
     createdAt: new Date().toISOString(),
@@ -352,6 +353,8 @@ export async function grantGlobalAutonomyPolicy(params: {
   const index = config.policies.findIndex(
     (entry) =>
       entry.agentName === policy.agentName &&
+      JSON.stringify(sortedUnique(entry.allowedSeverities)) ===
+        JSON.stringify(policy.allowedSeverities) &&
       JSON.stringify(sortedUnique(entry.allowedCodes)) ===
         JSON.stringify(policy.allowedCodes) &&
       JSON.stringify(sortedUnique(entry.appliesTo)) ===
