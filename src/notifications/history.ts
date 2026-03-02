@@ -33,6 +33,11 @@ async function appendJsonLine(
     .then(async () => {
       await mkdir(path.dirname(filePath), { recursive: true });
       await appendFile(filePath, `${JSON.stringify(payload)}\n`, "utf8");
+    })
+    .finally(() => {
+      if (fileWriteQueues.get(filePath) === writePromise) {
+        fileWriteQueues.delete(filePath);
+      }
     });
 
   fileWriteQueues.set(filePath, writePromise);
