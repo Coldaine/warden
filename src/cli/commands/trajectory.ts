@@ -17,6 +17,18 @@ export async function runTrajectoryCommand(args: string[]): Promise<void> {
       await store.init();
       console.log(`Initialized trajectory for repo "${repoSlug}"`);
       break;
+    case "get": {
+      const graph = await store.load();
+      console.log(`\nTrajectory: ${repoSlug} (Revision: ${graph.meta.revision})\n`);
+      console.table(graph.nodes.map(n => ({
+        ID: n.id,
+        Title: n.title,
+        Status: n.status,
+        Type: n.type,
+        Updated: n.updatedAt.slice(0, 10)
+      })));
+      break;
+    }
     case "validate": {
       const errors = await store.validate();
       if (errors.length > 0) {
