@@ -480,7 +480,7 @@ export function registerDashboardRoutes(app: Express): void {
       res.type("html").send(renderPage(`Trajectory: ${slug}`, `
         <div class="card">
           <h2>Work Trajectory</h2>
-          <pre class="mermaid">${mmd}</pre>
+          <pre class="mermaid">${escapeHtml(mmd)}</pre>
         </div>
         <script type="module">
           import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
