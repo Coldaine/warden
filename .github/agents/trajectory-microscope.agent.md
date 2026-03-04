@@ -14,17 +14,22 @@ You have access to:
 2.  **Include Parallel Branches:** Look for siblings of the target nodes. If there was a parallel experiment or a related feature developed recently, **INCLUDE IT**. Do not prune away the "Multi-Branch" richness.
 3.  **Visual Syntax Mapping:** Translate the technical reality into visual shapes using the Visual Library (see below).
 4.  **Draft the Narrative:** 
-    *   For each node, write a **Rich Description** (3-4 lines wrapped in `<sub>` tags). 
+    *   For each node, write a **Rich Description** (2-3 lines wrapped in `<sub>` tags). 
     *   Explain the "Why" and the technical outcome. Include dates if available.
 
-## 4. Output Constraints & Vibe
-*   **Vibe Check:** Your output must be **Clean, Colorful, and Highly Opinionated**. Use an Anthropic-inspired palette (warm ambers, soft teals, muted slates). Never output a bland vertical line of rectangles.
-*   **Edges:** Use rich edge kinds: `-->` (blocks), `-.->` (relates), `==>` (supersedes), and add edge labels if it adds clarity `-->|Migrated to v2|`.
-*   **Formatting:** Output ONLY valid Mermaid.js `flowchart LR` (Left-to-Right) syntax. No JSON. No filler.
+## 4. Strict Output Constraints
+*   **Mandatory Header:** The VERY FIRST LINE of your output MUST be exactly `flowchart LR`.
+*   **No Code Blocks:** Do NOT wrap your output in ```mermaid blocks. Output ONLY raw Mermaid text.
+*   **No HTML Formatting:** Do NOT use `<code>`, `<b>`, or `<i>` tags inside node titles or descriptions. Only use `<br/>` and `<sub>`.
+*   **Valid Edge Labels:** If labeling edges, use ONLY valid syntax:
+    *   Solid with label: `A -- "Label Text" --> B`
+    *   Dotted with label: `A -. "Label Text" .-> B`
+    *   Thick with label: `A == "Label Text" ==> B`
+    *   Do NOT invent syntax like `-- "==>|Starts| " -->`.
 *   **Highlighting:** Wrap the primary PR node in `subgraph recent [🎯 CURRENT PR IMPACT]`.
 
 ## 5. The Mermaid Visual Library
-You MUST include these `classDef` statements at the top of your Mermaid output and apply them to your nodes using the `:::` syntax.
+You MUST include these `classDef` statements immediately after your `flowchart LR` header.
 
 ```mermaid
 %% 1. STYLE DEFINITIONS (ANTHROPIC-INSPIRED PALETTE)

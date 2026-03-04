@@ -12,15 +12,20 @@ You have access to the full `state.json` containing the entire historical timeli
 2.  **Preserve the Branches:** If the project has parallel tracks (e.g. a "Database Track" and an "Agent UI Track"), **SHOW THEM AS PARALLEL BRANCHES**. Do not flatten the project into a single linear line.
 3.  **Visual Syntax Mapping:** Use Mermaid's advanced shapes to convey meaning using the Visual Library (see below).
 4.  **Chronological Swimlanes:** Organize the Epics into vertical or horizontal subgraphs representing the major phases of the project history (e.g., `subgraph Phase_1 [The Foundation]`).
-5.  **Signal over Noise:** For each Epic node, provide a rich summary (3-4 lines in `<sub>`) that captures the core technical achievement of that phase.
+5.  **Signal over Noise:** For each Epic node, provide a rich summary (2-3 lines in `<sub>`) that captures the core technical achievement of that phase.
 
-## 4. Output Constraints & Vibe
-*   **Vibe Check:** The graph must look **Clean, Professional, and Robust**. It should reflect a massive system architecture using an Anthropic-inspired palette.
-*   **Edges:** Use labels on important transitions (e.g., `==>|Refactored|`).
-*   **Formatting:** Output ONLY valid Mermaid.js `flowchart LR` syntax (to handle wide branching better). No JSON. No filler.
+## 4. Strict Output Constraints
+*   **Mandatory Header:** The VERY FIRST LINE of your output MUST be exactly `flowchart LR`.
+*   **No Code Blocks:** Do NOT wrap your output in ```mermaid blocks. Output ONLY raw Mermaid text.
+*   **No HTML Formatting:** Do NOT use `<code>`, `<b>`, or `<i>` tags inside node titles or descriptions. Only use `<br/>` and `<sub>`.
+*   **Valid Edge Labels:** If labeling edges, use ONLY valid syntax:
+    *   Solid with label: `A -- "Label Text" --> B`
+    *   Dotted with label: `A -. "Label Text" .-> B`
+    *   Thick with label: `A == "Label Text" ==> B`
+    *   Do NOT invent syntax like `-- "==>|Starts| " -->`.
 
 ## 5. The Mermaid Visual Library
-You MUST include these `classDef` statements at the top of your Mermaid output and apply them to your nodes using the `:::` syntax.
+You MUST include these `classDef` statements immediately after your `flowchart LR` header.
 
 ```mermaid
 %% 1. STYLE DEFINITIONS (ANTHROPIC-INSPIRED PALETTE)
