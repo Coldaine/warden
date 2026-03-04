@@ -12,7 +12,7 @@ import type {
   SnapshotBundle,
   StalenessSnapshot,
 } from "./types/snapshot.js";
-import { TrajectoryGraph } from "./types/trajectory.js";
+import type { TrajectoryGraph } from "./types/trajectory.js";
 
 export interface LoadedSnapshot extends SnapshotBundle {
   timestamp: string;
