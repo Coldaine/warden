@@ -24,18 +24,20 @@ A graph of 20 identical rectangles requires the user to read every single word t
 ## 3. Font Awesome Iconography
 **Decision:** Agents are instructed to aggressively utilize `fa:fa-` icons within node titles.
 **Justification:** 
-Icons act as visual "anchors" that decrease cognitive load. An icon of a bug (`fa:fa-bug`) or a lock (`fa:fa-lock`) conveys the intent of a node in 10 milliseconds, whereas reading "Authentication Hardening" takes longer. It increases the "Vibe" density of the graph, making it look like a polished dashboard rather than a raw diagram.
+Icons act as visual "anchors" that decrease cognitive load. An icon of a bug (`fa:fa-bug`) or a lock (`fa:fa-lock`) conveys the intent of a node in 10 milliseconds. It increases the visual density of the graph, making it look like a polished dashboard rather than a raw diagram.
 
-## 4. Cybernetic Color Palettes (`classDef`)
-**Decision:** We enforce a high-contrast, dark-mode-optimized color palette through explicit `classDef` definitions, rather than relying on Mermaid's default white/blue corporate styling.
+## 4. Anthropic-Inspired Color Palette (`classDef`)
+**Decision:** We enforce a clean, warm, and highly legible color palette inspired by modern AI interfaces like Anthropic's Claude, stepping away from harsh corporate defaults or overwhelming neon cyberpunk themes.
 **Justification:** 
-The Warden system is built around the "Vibe" of autonomous agents, security, and orchestration. The default Mermaid styling feels like a 1990s UML diagram. By injecting explicit hex codes (e.g., Deep Purples `#1a1a2e`, Neon Greens `#4ade80`), we ensure the visual artifact feels native to modern, high-tier engineering environments (like Cursor or VS Code Dark+).
+The Warden system should feel elevated, calm, and readable in both light and dark modes on GitHub. We use soft off-whites, warm ambers, and muted slates to create a professional, colorful, but restrained visual aesthetic.
 
 ### Core Palette Definitions
-*   `classDef core`: `fill:#2d1b4e, stroke:#a78bfa` (Deep purple, representing AI/Agentic work).
-*   `classDef human`: `fill:#1e293b, stroke:#94a3b8` (Slate gray, representing manual human intervention).
-*   `classDef blocked`: `fill:#450a0a, stroke:#f87171` (Deep red, representing dead ends or failed experiments).
-*   `classDef goal`: `fill:#064e3b, stroke:#4ade80` (Deep green, representing open, ultimate objectives).
+*   `classDef core`: `fill:#f5f3ec, stroke:#d97757, stroke-width:2px, color:#1c1917` (Warm cream with Anthropic amber border - active/core work).
+*   `classDef complete`: `fill:#f4f4f5, stroke:#a1a1aa, stroke-width:1px, color:#52525b` (Muted zinc - finished work).
+*   `classDef goal`: `fill:#ecfdf5, stroke:#14b8a6, stroke-width:2px, color:#0f766e` (Soft teal - open objectives).
+*   `classDef blocked`: `fill:#fff1f2, stroke:#f43f5e, stroke-width:2px, color:#9f1239` (Soft rose - dead ends or blockers).
+
+*(Note: For strict Dark Mode environments, these translate to deep charcoal fills with the same vibrant stroke colors).*
 
 ## 5. Edge Semantics & Labeling
 **Decision:** We utilize multiple edge types (`-->`, `-.->`, `==>`) and encourage edge labels.
@@ -50,3 +52,14 @@ In an execution graph, an arrow just means "blocks." In a *historical* graph, th
 **Decision:** The specific node representing the current Pull Request MUST be wrapped in a dashed subgraph `subgraph recent [🎯 CURRENT PR IMPACT]`.
 **Justification:** 
 When an agent drops a 15-node graph into a PR comment, the human reviewer's first question is, "Where am I in this map?" The `RECENT` subgraph acts as a giant "You Are Here" pin on a mall directory, instantly grounding the reviewer's perspective before they begin analyzing the surrounding neighborhood.
+
+## 7. The Mermaid Visual Library (Agent Context)
+To assist LLM agents in generating these graphs without hallucinating styles, they are provided with a strict **Visual Library** in their prompt context:
+
+```mermaid
+%% AGENT VISUAL LIBRARY REFERENCE
+classDef core fill:#f5f3ec,stroke:#d97757,stroke-width:2px,color:#1c1917
+classDef complete fill:#f4f4f5,stroke:#a1a1aa,stroke-width:1px,color:#52525b
+classDef goal fill:#ecfdf5,stroke:#14b8a6,stroke-width:2px,color:#0f766e
+classDef blocked fill:#fff1f2,stroke:#f43f5e,stroke-width:2px,color:#9f1239
+```
